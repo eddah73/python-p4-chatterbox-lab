@@ -4,7 +4,7 @@ from flask import Flask, request, make_response, jsonify
 from flask_cors import CORS
 from flask_migrate import Migrate
 from models import db, Message
-
+from flask import abort
 app = Flask(__name__)
 CORS(app)  # Enable CORS
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
@@ -43,12 +43,14 @@ def create_message():
 @app.route('/messages/<int:id>', methods=['PATCH'])
 def update_message(id):
     """Updates the body of the message and returns the updated message as JSON."""
-    message = Message.query.get_or_404(id)
-    data = request.get_json()
+    message = db.session.get(Message, id)
+    if message is None:
+        abort(404)
 
+    data = request.get_json()
     if 'body' in data:
         message.body = data['body']
-        
+
     db.session.commit()
     
     return make_response(message.to_dict(), 200)
@@ -56,7 +58,10 @@ def update_message(id):
 @app.route('/messages/<int:id>', methods=['DELETE'])
 def delete_message(id):
     """Deletes the message from the database and returns a confirmation message."""
-    message = Message.query.get_or_404(id)
+    message = db.session.get(Message, id)
+    if message is None:
+        abort(404)
+
     db.session.delete(message)
     db.session.commit()
     
