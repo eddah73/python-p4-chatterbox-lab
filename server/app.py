@@ -1,71 +1,63 @@
-#!/usr/bin/env python3
-
 from flask import Flask, request, make_response, jsonify
 from flask_cors import CORS
 from flask_migrate import Migrate
 from models import db, Message
-from flask import abort
+
 app = Flask(__name__)
-CORS(app)  # Enable CORS
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.json.compact = False
 
+CORS(app)
 migrate = Migrate(app, db)
 db.init_app(app)
 
-@app.route('/')
-def home():
-    """Home route for the API."""
-    return '<h1>Message API</h1>'
-
+# Get all messages
 @app.route('/messages', methods=['GET'])
 def get_messages():
-    """Returns an array of all messages as JSON, ordered by created_at in ascending order."""
     messages = Message.query.order_by(Message.created_at.asc()).all()
-    return make_response(jsonify([message.to_dict() for message in messages]), 200)
+    return jsonify([message.to_dict() for message in messages]), 200
 
+# Create a new message
 @app.route('/messages', methods=['POST'])
 def create_message():
-    """Creates a new message with a body and username, and returns the created message as JSON."""
     data = request.get_json()
-
-    if not data or 'body' not in data or 'username' not in data:
-        return make_response(jsonify({"error": "Invalid input"}), 400)
-
-    new_message = Message(body=data['body'], username=data['username'])
-    
+    new_message = Message(
+        body=data.get('body'),
+        username=data.get('username')
+    )
     db.session.add(new_message)
     db.session.commit()
-    
-    return make_response(new_message.to_dict(), 201)
+    return jsonify(new_message.to_dict()), 201
 
+# Get a single message by ID
+@app.route('/messages/<int:id>', methods=['GET'])
+def get_message_by_id(id):
+    message = db.session.get(Message, id)  # Updated to use Session.get()
+    if message is None:
+        return make_response(jsonify({"error": "Message not found"}), 404)
+    return jsonify(message.to_dict()), 200
+
+# Update a message
 @app.route('/messages/<int:id>', methods=['PATCH'])
 def update_message(id):
-    """Updates the body of the message and returns the updated message as JSON."""
-    message = db.session.get(Message, id)
-    if message is None:
-        abort(404)
-
     data = request.get_json()
-    if 'body' in data:
-        message.body = data['body']
-
+    message = db.session.get(Message, id)  # Updated to use Session.get()
+    if message is None:
+        return make_response(jsonify({"error": "Message not found"}), 404)
+    message.body = data.get('body', message.body)
     db.session.commit()
-    
-    return make_response(message.to_dict(), 200)
+    return jsonify(message.to_dict()), 200
 
+# Delete a message
 @app.route('/messages/<int:id>', methods=['DELETE'])
 def delete_message(id):
-    """Deletes the message from the database and returns a confirmation message."""
-    message = db.session.get(Message, id)
+    message = db.session.get(Message, id)  # Updated to use Session.get()
     if message is None:
-        abort(404)
-
+        return make_response(jsonify({"error": "Message not found"}), 404)
     db.session.delete(message)
     db.session.commit()
-    
-    return make_response(jsonify({"message": "Message deleted successfully."}), 204)
+    return make_response(jsonify({"message": "Message deleted"}), 204)
 
 if __name__ == '__main__':
-    app.run(port=5555, debug=True)
+    app.run(port=5555)
